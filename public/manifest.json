@@ -1,8 +1,8 @@
 {
-  "name": "Halı Yıkama Admin Panel",
+  "name": "Halı Yıkama",
   "short_name": "Halı Yıkama",
-  "description": "Halı yıkama rezervasyon yönetim paneli",
-  "start_url": "/admin/dashboard",
+  "description": "Halı yıkama hizmeti rezervasyonu",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#3b82f6",
