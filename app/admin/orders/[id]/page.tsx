@@ -6,7 +6,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { ArrowLeftIcon, PrinterIcon, PhoneIcon, EnvelopeIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, PrinterIcon, PhoneIcon, EnvelopeIcon, MapPinIcon, EyeIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface BookingDetail {
   id: string; // UUID
@@ -71,6 +73,8 @@ export default function OrderDetailPage() {
   const router = useRouter();
   const [booking, setBooking] = useState<BookingDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (params.id) {
@@ -98,193 +102,446 @@ export default function OrderDetailPage() {
   const handlePrint = () => {
     if (!booking) return;
 
-    console.log('🖨️ Printing booking:', booking);
-    console.log('👤 User data:', booking.user);
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error('Pop-up engelleyici nedeniyle açılamadı');
-      return;
-    }
-
-    const getStatusLabel = (status: string) => {
-      const labels: Record<string, string> = {
-        pending: 'Bekliyor',
-        confirmed: 'Onaylandı',
-        in_progress: 'İşlemde',
-        completed: 'Tamamlandı',
-        cancelled: 'İptal Edildi',
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        putOnlyUsedFonts: true,
+        floatPrecision: 16
+      });
+      
+      // Set font to helvetica which has better unicode support
+      doc.setFont('helvetica');
+      
+      const getStatusLabel = (status: string) => {
+        const labels: Record<string, string> = {
+          pending: 'Bekliyor',
+          confirmed: 'Onaylandi',
+          in_progress: 'Islemde',
+          completed: 'Tamamlandi',
+          cancelled: 'Iptal Edildi',
+        };
+        return labels[status] || status;
       };
-      return labels[status] || status;
-    };
 
-    // Get customer info - prioritize user_details from backend
-    const customer = booking.user_details || booking.user;
-    const customerName = customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : '-';
-    const customerEmail = customer?.email || '-';
-    const customerPhone = customer?.phone || '-';
+      // Get customer info - prioritize user_details from backend
+      const customer = booking.user_details || booking.user;
+      const customerName = customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : '-';
+      const customerEmail = customer?.email || '-';
+      const customerPhone = customer?.phone || '-';
 
-    console.log('👥 Customer for PDF:', { customer, customerName, customerEmail, customerPhone });
+      let yPos = 20;
 
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Sipariş #${booking.booking_number || booking.id}</title>
-        <style>
-          @page { margin: 15mm; size: A4; }
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: Arial, sans-serif; font-size: 9px; color: #1f2937; line-height: 1.3; }
-          .header { text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 8px; margin-bottom: 10px; }
-          .header h1 { font-size: 16px; color: #1e40af; margin-bottom: 3px; }
-          .header .info { font-size: 8px; color: #6b7280; }
-          .status { display: inline-block; padding: 2px 8px; border-radius: 8px; font-size: 8px; font-weight: 600; margin-left: 8px; }
-          .status-pending { background-color: #fef3c7; color: #92400e; }
-          .status-confirmed { background-color: #dbeafe; color: #1e40af; }
-          .status-in_progress { background-color: #e9d5ff; color: #6b21a8; }
-          .status-completed { background-color: #d1fae5; color: #065f46; }
-          .status-cancelled { background-color: #fee2e2; color: #991b1b; }
-          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-          .section { background: #f9fafb; padding: 6px; border-radius: 3px; }
-          .section-title { font-size: 9px; font-weight: bold; color: #374151; margin-bottom: 4px; border-bottom: 1px solid #d1d5db; padding-bottom: 2px; }
-          .label { font-size: 7px; color: #6b7280; margin-top: 3px; }
-          .value { font-size: 8px; color: #1f2937; font-weight: 500; }
-          .items-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 8px; }
-          .items-table th { background: #f3f4f6; padding: 3px 4px; text-align: left; font-size: 8px; font-weight: 600; border-bottom: 1px solid #d1d5db; }
-          .items-table td { padding: 3px 4px; border-bottom: 1px solid #e5e7eb; }
-          .items-table tr:last-child td { border-bottom: none; }
-          .notes { background: #fef3c7; border-left: 2px solid #f59e0b; padding: 5px; margin-bottom: 6px; border-radius: 2px; }
-          .notes h4 { font-size: 8px; font-weight: 600; color: #92400e; margin-bottom: 2px; }
-          .notes p { font-size: 8px; color: #78350f; }
-          .total-section { background: #f9fafb; padding: 6px; border-radius: 3px; margin-bottom: 8px; }
-          .total-row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 8px; }
-          .total-row.final { font-size: 11px; font-weight: bold; color: #1e40af; padding-top: 4px; border-top: 2px solid #2563eb; margin-top: 4px; }
-          .footer { margin-top: 10px; padding-top: 6px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 7px; color: #9ca3af; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>Sipariş Detayı #${booking.booking_number || booking.id}</h1>
-          <div class="info">
-            Oluşturma: ${new Date(booking.created_at).toLocaleString('tr-TR')}
-            <span class="status status-${booking.status}">${getStatusLabel(booking.status)}</span>
-          </div>
-        </div>
+      // Header
+      doc.setFontSize(18);
+      doc.setTextColor(30, 64, 175);
+      doc.text(`Siparis #${booking.booking_number || booking.id}`, 105, yPos, { align: 'center' });
+      
+      yPos += 8;
+      doc.setFontSize(9);
+      doc.setTextColor(107, 114, 128);
+      doc.text(`Olusturulma: ${new Date(booking.created_at).toLocaleString('tr-TR')} | Durum: ${getStatusLabel(booking.status)}`, 105, yPos, { align: 'center' });
+      
+      yPos += 10;
+      doc.setDrawColor(37, 99, 235);
+      doc.setLineWidth(0.5);
+      doc.line(20, yPos, 190, yPos);
+      yPos += 8;
 
-        <div class="grid">
-          <div class="section">
-            <div class="section-title">👤 Müşteri Bilgileri</div>
-            <div class="label">Ad Soyad</div>
-            <div class="value">${customerName}</div>
-            <div class="label">E-posta</div>
-            <div class="value">${customerEmail}</div>
-            <div class="label">Telefon</div>
-            <div class="value">${customerPhone}</div>
-          </div>
+      // Customer Info Section
+      doc.setFontSize(11);
+      doc.setTextColor(55, 65, 81);
+      doc.text('Musteri Bilgileri', 20, yPos);
+      yPos += 6;
+      
+      doc.setFontSize(9);
+      doc.setTextColor(31, 41, 55);
+      doc.text(`Ad Soyad: ${customerName}`, 20, yPos);
+      yPos += 5;
+      doc.text(`E-posta: ${customerEmail}`, 20, yPos);
+      yPos += 5;
+      doc.text(`Telefon: ${customerPhone}`, 20, yPos);
+      yPos += 10;
 
-          <div class="section">
-            <div class="section-title">📍 Alım Bilgileri</div>
-            <div class="label">Adres Başlığı</div>
-            <div class="value">${booking.pickup_address_details?.title || '-'}</div>
-            <div class="label">Tam Adres</div>
-            <div class="value">${booking.pickup_address_details?.full_address || '-'}</div>
-            <div class="label">İlçe</div>
-            <div class="value">${booking.pickup_address_details?.district_details?.name || '-'}</div>
-            <div class="label">Tarih ve Saat</div>
-            <div class="value">${new Date(booking.pickup_date).toLocaleDateString('tr-TR')}${booking.pickup_time_slot ? ` | ${booking.pickup_time_slot.start_time} - ${booking.pickup_time_slot.end_time}` : ''}</div>
-          </div>
-        </div>
+      // Pickup Address Section
+      doc.setFontSize(11);
+      doc.setTextColor(55, 65, 81);
+      doc.text('Alim Bilgileri', 20, yPos);
+      yPos += 6;
+      
+      doc.setFontSize(9);
+      doc.setTextColor(31, 41, 55);
+      doc.text(`Adres: ${booking.pickup_address_details?.title || '-'}`, 20, yPos);
+      yPos += 5;
+      
+      const fullAddress = booking.pickup_address_details?.full_address || '-';
+      const addressLines = doc.splitTextToSize(fullAddress, 170);
+      doc.text(addressLines, 20, yPos);
+      yPos += addressLines.length * 5;
+      
+      doc.text(`Ilce: ${booking.pickup_address_details?.district_details?.name || '-'}`, 20, yPos);
+      yPos += 5;
+      
+      const pickupDate = new Date(booking.pickup_date).toLocaleDateString('tr-TR');
+      const timeSlot = booking.pickup_time_slot ? ` ${booking.pickup_time_slot.start_time} - ${booking.pickup_time_slot.end_time}` : '';
+      doc.text(`Tarih ve Saat: ${pickupDate}${timeSlot}`, 20, yPos);
+      yPos += 10;
 
-        ${booking.items && booking.items.length > 0 ? `
-        <div style="margin-bottom: 8px;">
-          <div style="font-size: 10px; font-weight: bold; color: #374151; margin-bottom: 4px; border-bottom: 2px solid #e5e7eb; padding-bottom: 2px;">🧺 Sipariş Kalemleri</div>
-          <table class="items-table">
-            <thead>
-              <tr>
-                <th>Hizmet</th>
-                <th>Kategori</th>
-                <th style="text-align: right;">Adet</th>
-                <th style="text-align: right;">Birim</th>
-                <th style="text-align: right;">Toplam</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${booking.items.map((item: any) => `
-                <tr>
-                  <td>${item.subtype_details?.name || '-'}</td>
-                  <td>${item.subtype_details?.category?.name || '-'}</td>
-                  <td style="text-align: right;">${item.quantity}</td>
-                  <td style="text-align: right;">${parseFloat(item.unit_price || '0').toFixed(2)} ${booking.currency}</td>
-                  <td style="text-align: right; font-weight: 600;">${parseFloat(item.line_total || '0').toFixed(2)} ${booking.currency}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-        ` : ''}
+      // Items Table
+      if (booking.items && booking.items.length > 0) {
+        doc.setFontSize(11);
+        doc.setTextColor(55, 65, 81);
+        doc.text('Siparis Kalemleri', 20, yPos);
+        yPos += 5;
 
-        ${booking.customer_notes || booking.admin_notes ? `
-        <div style="margin-bottom: 8px;">
-          ${booking.customer_notes ? `
-          <div class="notes">
-            <h4>📝 Müşteri Notları:</h4>
-            <p>${booking.customer_notes}</p>
-          </div>
-          ` : ''}
-          ${booking.admin_notes ? `
-          <div class="notes" style="background: #dbeafe; border-left-color: #2563eb;">
-            <h4 style="color: #1e40af;">🔒 Admin Notları:</h4>
-            <p style="color: #1e3a8a;">${booking.admin_notes}</p>
-          </div>
-          ` : ''}
-        </div>
-        ` : ''}
+        const tableData = booking.items.map(item => [
+          item.subtype_details?.name || 'Hizmet',
+          item.subtype_details?.category?.name || '-',
+          item.quantity.toString(),
+          `${parseFloat(item.unit_price).toFixed(2)} ${booking.currency}`,
+          `${parseFloat(item.line_total).toFixed(2)} ${booking.currency}`,
+        ]);
 
-        <div class="total-section">
-          ${booking.subtotal ? `
-          <div class="total-row">
-            <span>Ara Toplam:</span>
-            <span>${parseFloat(booking.subtotal).toFixed(2)} ${booking.currency}</span>
-          </div>
-          ` : ''}
-          ${booking.delivery_fee && parseFloat(booking.delivery_fee) > 0 ? `
-          <div class="total-row">
-            <span>Teslimat Ücreti:</span>
-            <span>${parseFloat(booking.delivery_fee).toFixed(2)} ${booking.currency}</span>
-          </div>
-          ` : ''}
-          ${booking.discount && parseFloat(booking.discount) > 0 ? `
-          <div class="total-row" style="color: #dc2626;">
-            <span>İndirim:</span>
-            <span>-${parseFloat(booking.discount).toFixed(2)} ${booking.currency}</span>
-          </div>
-          ` : ''}
-          <div class="total-row final">
-            <span>GENEL TOPLAM:</span>
-            <span>${parseFloat(booking.total || '0').toFixed(2)} ${booking.currency}</span>
-          </div>
-        </div>
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Hizmet', 'Kategori', 'Adet', 'Birim Fiyat', 'Toplam']],
+          body: tableData,
+          theme: 'grid',
+          headStyles: { 
+            fillColor: [37, 99, 235], 
+            fontSize: 9,
+            font: 'helvetica'
+          },
+          bodyStyles: { 
+            fontSize: 8,
+            font: 'helvetica'
+          },
+          columnStyles: {
+            2: { halign: 'right' },
+            3: { halign: 'right' },
+            4: { halign: 'right', fontStyle: 'bold' },
+          },
+        });
 
-        <div class="footer">
-          <div>Yazdırma Tarihi: ${new Date().toLocaleString('tr-TR')} | Bu belge elektronik olarak oluşturulmuştur.</div>
-        </div>
+        yPos = (doc as any).lastAutoTable.finalY + 10;
+      }
 
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 100);
-            }, 300);
-          };
-        </script>
-      </body>
-      </html>
-    `;
+      // Notes Section
+      if (booking.customer_notes || booking.admin_notes) {
+        if (yPos > 250) {
+          doc.addPage();
+          yPos = 20;
+        }
 
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    toast.success('PDF oluşturuluyor...');
+        doc.setFontSize(11);
+        doc.setTextColor(55, 65, 81);
+        doc.text('Notlar', 20, yPos);
+        yPos += 6;
+
+        doc.setFontSize(9);
+        if (booking.customer_notes) {
+          doc.setTextColor(120, 53, 15);
+          doc.text('Musteri Notu:', 20, yPos);
+          yPos += 5;
+          const noteLines = doc.splitTextToSize(booking.customer_notes, 170);
+          doc.text(noteLines, 20, yPos);
+          yPos += noteLines.length * 5 + 3;
+        }
+
+        if (booking.admin_notes) {
+          doc.setTextColor(30, 58, 138);
+          doc.text('Admin Notu:', 20, yPos);
+          yPos += 5;
+          const noteLines = doc.splitTextToSize(booking.admin_notes, 170);
+          doc.text(noteLines, 20, yPos);
+          yPos += noteLines.length * 5 + 3;
+        }
+
+        yPos += 5;
+      }
+
+      // Total Section
+      if (yPos > 250) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      doc.setFontSize(11);
+      doc.setTextColor(55, 65, 81);
+      doc.text('Odeme Ozeti', 20, yPos);
+      yPos += 6;
+
+      doc.setFontSize(9);
+      doc.setTextColor(31, 41, 55);
+      
+      if (booking.subtotal) {
+        doc.text(`Ara Toplam:`, 20, yPos);
+        doc.text(`${parseFloat(booking.subtotal).toFixed(2)} ${booking.currency}`, 190, yPos, { align: 'right' });
+        yPos += 5;
+      }
+
+      if (booking.delivery_fee && parseFloat(booking.delivery_fee) > 0) {
+        doc.text(`Teslimat Ucreti:`, 20, yPos);
+        doc.text(`${parseFloat(booking.delivery_fee).toFixed(2)} ${booking.currency}`, 190, yPos, { align: 'right' });
+        yPos += 5;
+      }
+
+      if (booking.discount && parseFloat(booking.discount) > 0) {
+        doc.setTextColor(220, 38, 38);
+        doc.text(`Indirim:`, 20, yPos);
+        doc.text(`-${parseFloat(booking.discount).toFixed(2)} ${booking.currency}`, 190, yPos, { align: 'right' });
+        yPos += 5;
+      }
+
+      yPos += 2;
+      doc.setDrawColor(37, 99, 235);
+      doc.setLineWidth(0.3);
+      doc.line(20, yPos, 190, yPos);
+      yPos += 6;
+
+      doc.setFontSize(12);
+      doc.setTextColor(30, 64, 175);
+      doc.text(`GENEL TOPLAM:`, 20, yPos);
+      doc.text(`${parseFloat(booking.total || '0').toFixed(2)} ${booking.currency}`, 190, yPos, { align: 'right' });
+
+      // Footer
+      doc.setFontSize(8);
+      doc.setTextColor(156, 163, 175);
+      doc.text(`Bu belge ${new Date().toLocaleString('tr-TR')} tarihinde otomatik olarak olusturulmustur.`, 105, 285, { align: 'center' });
+
+      // Download PDF
+      doc.save(`Siparis_${booking.booking_number || booking.id}.pdf`);
+      toast.success('PDF indirildi');
+      
+    } catch (error) {
+      console.error('PDF olusturma hatasi:', error);
+      toast.error('PDF olusturulamadi');
+    }
+  };
+
+  const handlePreview = () => {
+    if (!booking) return;
+
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        putOnlyUsedFonts: true,
+        floatPrecision: 16
+      });
+      
+      // Set font to helvetica
+      doc.setFont('helvetica');
+      
+      const getStatusLabel = (status: string) => {
+        const labels: Record<string, string> = {
+          pending: 'Bekliyor',
+          confirmed: 'Onaylandi',
+          in_progress: 'Islemde',
+          completed: 'Tamamlandi',
+          cancelled: 'Iptal Edildi',
+        };
+        return labels[status] || status;
+      };
+
+      // Get customer info - prioritize user_details from backend
+      const customer = booking.user_details || booking.user;
+      const customerName = customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : '-';
+      const customerEmail = customer?.email || '-';
+      const customerPhone = customer?.phone || '-';
+
+      let yPos = 20;
+
+      // Header
+      doc.setFontSize(18);
+      doc.setTextColor(30, 64, 175);
+      doc.text(`Siparis #${booking.booking_number || booking.id}`, 105, yPos, { align: 'center' });
+      
+      yPos += 8;
+      doc.setFontSize(9);
+      doc.setTextColor(107, 114, 128);
+      doc.text(`Olusturulma: ${new Date(booking.created_at).toLocaleString('tr-TR')} | Durum: ${getStatusLabel(booking.status)}`, 105, yPos, { align: 'center' });
+      
+      yPos += 10;
+      doc.setDrawColor(37, 99, 235);
+      doc.setLineWidth(0.5);
+      doc.line(20, yPos, 190, yPos);
+      yPos += 8;
+
+      // Customer Info Section
+      doc.setFontSize(11);
+      doc.setTextColor(55, 65, 81);
+      doc.text('Musteri Bilgileri', 20, yPos);
+      yPos += 6;
+      
+      doc.setFontSize(9);
+      doc.setTextColor(31, 41, 55);
+      doc.text(`Ad Soyad: ${customerName}`, 20, yPos);
+      yPos += 5;
+      doc.text(`E-posta: ${customerEmail}`, 20, yPos);
+      yPos += 5;
+      doc.text(`Telefon: ${customerPhone}`, 20, yPos);
+      yPos += 10;
+
+      // Pickup Address Section
+      doc.setFontSize(11);
+      doc.setTextColor(55, 65, 81);
+      doc.text('Alim Bilgileri', 20, yPos);
+      yPos += 6;
+      
+      doc.setFontSize(9);
+      doc.setTextColor(31, 41, 55);
+      doc.text(`Adres: ${booking.pickup_address_details?.title || '-'}`, 20, yPos);
+      yPos += 5;
+      
+      const fullAddress = booking.pickup_address_details?.full_address || '-';
+      const addressLines = doc.splitTextToSize(fullAddress, 170);
+      doc.text(addressLines, 20, yPos);
+      yPos += addressLines.length * 5;
+      
+      doc.text(`Ilce: ${booking.pickup_address_details?.district_details?.name || '-'}`, 20, yPos);
+      yPos += 5;
+      
+      const pickupDate = new Date(booking.pickup_date).toLocaleDateString('tr-TR');
+      const timeSlot = booking.pickup_time_slot ? ` ${booking.pickup_time_slot.start_time} - ${booking.pickup_time_slot.end_time}` : '';
+      doc.text(`Tarih ve Saat: ${pickupDate}${timeSlot}`, 20, yPos);
+      yPos += 10;
+
+      // Items Table
+      if (booking.items && booking.items.length > 0) {
+        doc.setFontSize(11);
+        doc.setTextColor(55, 65, 81);
+        doc.text('Siparis Kalemleri', 20, yPos);
+        yPos += 5;
+
+        const tableData = booking.items.map(item => [
+          item.subtype_details?.name || 'Hizmet',
+          item.subtype_details?.category?.name || '-',
+          item.quantity.toString(),
+          `${parseFloat(item.unit_price).toFixed(2)} ${booking.currency}`,
+          `${parseFloat(item.line_total).toFixed(2)} ${booking.currency}`,
+        ]);
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Hizmet', 'Kategori', 'Adet', 'Birim Fiyat', 'Toplam']],
+          body: tableData,
+          theme: 'grid',
+          headStyles: { 
+            fillColor: [37, 99, 235], 
+            fontSize: 9,
+            font: 'helvetica'
+          },
+          bodyStyles: { 
+            fontSize: 8,
+            font: 'helvetica'
+          },
+          columnStyles: {
+            2: { halign: 'right' },
+            3: { halign: 'right' },
+            4: { halign: 'right', fontStyle: 'bold' },
+          },
+        });
+
+        yPos = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      // Notes Section
+      if (booking.customer_notes || booking.admin_notes) {
+        if (yPos > 250) {
+          doc.addPage();
+          yPos = 20;
+        }
+
+        doc.setFontSize(11);
+        doc.setTextColor(55, 65, 81);
+        doc.text('Notlar', 20, yPos);
+        yPos += 6;
+
+        doc.setFontSize(9);
+        if (booking.customer_notes) {
+          doc.setTextColor(120, 53, 15);
+          doc.text('Musteri Notu:', 20, yPos);
+          yPos += 5;
+          const noteLines = doc.splitTextToSize(booking.customer_notes, 170);
+          doc.text(noteLines, 20, yPos);
+          yPos += noteLines.length * 5 + 3;
+        }
+
+        if (booking.admin_notes) {
+          doc.setTextColor(30, 58, 138);
+          doc.text('Admin Notu:', 20, yPos);
+          yPos += 5;
+          const noteLines = doc.splitTextToSize(booking.admin_notes, 170);
+          doc.text(noteLines, 20, yPos);
+          yPos += noteLines.length * 5 + 3;
+        }
+
+        yPos += 5;
+      }
+
+      // Total Section
+      if (yPos > 250) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      doc.setFontSize(11);
+      doc.setTextColor(55, 65, 81);
+      doc.text('Odeme Ozeti', 20, yPos);
+      yPos += 6;
+
+      doc.setFontSize(9);
+      doc.setTextColor(31, 41, 55);
+      
+      if (booking.subtotal) {
+        doc.text(`Ara Toplam:`, 20, yPos);
+        doc.text(`${parseFloat(booking.subtotal).toFixed(2)} ${booking.currency}`, 190, yPos, { align: 'right' });
+        yPos += 5;
+      }
+
+      if (booking.delivery_fee && parseFloat(booking.delivery_fee) > 0) {
+        doc.text(`Teslimat Ucreti:`, 20, yPos);
+        doc.text(`${parseFloat(booking.delivery_fee).toFixed(2)} ${booking.currency}`, 190, yPos, { align: 'right' });
+        yPos += 5;
+      }
+
+      if (booking.discount && parseFloat(booking.discount) > 0) {
+        doc.setTextColor(220, 38, 38);
+        doc.text(`Indirim:`, 20, yPos);
+        doc.text(`-${parseFloat(booking.discount).toFixed(2)} ${booking.currency}`, 190, yPos, { align: 'right' });
+        yPos += 5;
+      }
+
+      yPos += 2;
+      doc.setDrawColor(37, 99, 235);
+      doc.setLineWidth(0.3);
+      doc.line(20, yPos, 190, yPos);
+      yPos += 6;
+
+      doc.setFontSize(12);
+      doc.setTextColor(30, 64, 175);
+      doc.text(`GENEL TOPLAM:`, 20, yPos);
+      doc.text(`${parseFloat(booking.total || '0').toFixed(2)} ${booking.currency}`, 190, yPos, { align: 'right' });
+
+      // Footer
+      doc.setFontSize(8);
+      doc.setTextColor(156, 163, 175);
+      doc.text(`Bu belge ${new Date().toLocaleString('tr-TR')} tarihinde otomatik olarak olusturulmustur.`, 105, 285, { align: 'center' });
+
+      // Open PDF in modal for preview
+      const pdfBlob = doc.output('blob');
+      const pdfObjectUrl = URL.createObjectURL(pdfBlob);
+      setPdfUrl(pdfObjectUrl);
+      setShowPdfModal(true);
+      toast.success('On izleme aciliyor...');
+      
+    } catch (error) {
+      console.error('PDF on izleme hatasi:', error);
+      toast.error('On izleme olusturulamadi');
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -322,10 +579,22 @@ export default function OrderDetailPage() {
             </p>
           </div>
         </div>
-        <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-          <PrinterIcon className="h-5 w-5" />
-          Yazdır
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handlePreview} 
+            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+          >
+            <EyeIcon className="h-5 w-5" />
+            Ön İzle
+          </button>
+          <button 
+            onClick={handlePrint} 
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <PrinterIcon className="h-5 w-5" />
+            PDF İndir
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -478,6 +747,81 @@ export default function OrderDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* PDF Preview Modal */}
+      {showPdfModal && pdfUrl && (
+        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            {/* Background overlay */}
+            <div 
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
+              aria-hidden="true"
+              onClick={() => {
+                setShowPdfModal(false);
+                if (pdfUrl) {
+                  URL.revokeObjectURL(pdfUrl);
+                  setPdfUrl(null);
+                }
+              }}
+            ></div>
+
+            {/* Modal panel */}
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-5xl sm:w-full">
+              {/* Header */}
+              <div className="bg-white px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900">
+                  PDF On Izleme - Siparis #{booking.booking_number || booking.id}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowPdfModal(false);
+                    if (pdfUrl) {
+                      URL.revokeObjectURL(pdfUrl);
+                      setPdfUrl(null);
+                    }
+                  }}
+                  className="text-gray-400 hover:text-gray-500 focus:outline-none"
+                >
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              </div>
+              
+              {/* PDF Viewer */}
+              <div className="bg-gray-100 p-4" style={{ height: '80vh' }}>
+                <iframe
+                  src={pdfUrl}
+                  className="w-full h-full border-0 rounded-lg shadow-lg"
+                  title="PDF Preview"
+                />
+              </div>
+
+              {/* Footer */}
+              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-3">
+                <button
+                  type="button"
+                  onClick={handlePrint}
+                  className="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:w-auto sm:text-sm"
+                >
+                  PDF Indir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPdfModal(false);
+                    if (pdfUrl) {
+                      URL.revokeObjectURL(pdfUrl);
+                      setPdfUrl(null);
+                    }
+                  }}
+                  className="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:w-auto sm:text-sm"
+                >
+                  Kapat
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
