@@ -220,7 +220,7 @@ export default function NotificationBell() {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-20 max-h-[600px] flex flex-col">
+          <div className="fixed sm:absolute top-14 sm:top-auto right-2 sm:right-0 sm:mt-2 w-[calc(100vw-1rem)] sm:w-96 max-w-sm sm:max-w-none bg-white rounded-lg shadow-xl border border-gray-200 z-20 max-h-[80vh] sm:max-h-[600px] flex flex-col">
             {/* Header */}
             <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-gray-900">
