@@ -4,6 +4,7 @@ import './globals.css'
 import { Toaster } from 'react-hot-toast'
 import { Providers } from '@/components/Providers'
 import FirebaseServiceWorkerRegistration from '@/components/FirebaseServiceWorkerRegistration'
+import NotificationPrompt from '@/components/NotificationPrompt'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
@@ -57,6 +58,7 @@ export default function RootLayout({
       <body className={inter.variable}>
         <Providers>
           <FirebaseServiceWorkerRegistration />
+          <NotificationPrompt />
           {children}
         </Providers>
         <Toaster position="top-right" />
