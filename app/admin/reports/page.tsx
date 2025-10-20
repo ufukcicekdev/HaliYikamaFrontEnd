@@ -50,9 +50,16 @@ export default function ReportsPage() {
       setLoading(true);
       const response = await apiClient.get(`/admin/reports/?days=${dateRange}`);
       
+      console.log('📊 Reports response:', response);
+      
       if (response.success && response.data) {
-        setStats(response.data.stats || stats);
-        setRevenueData(response.data.revenue_data || []);
+        // Handle nested response structure
+        const data = response.data.data || response.data;
+        
+        console.log('📊 Actual reports data:', data);
+        
+        setStats(data.stats || stats);
+        setRevenueData(data.revenue_data || []);
       }
     } catch (error: any) {
       console.error('Error fetching reports:', error);
@@ -81,15 +88,13 @@ export default function ReportsPage() {
     color: string;
   }) => (
     <div className="bg-white rounded-lg shadow-sm p-6">
-      <div className="flex items-center">
+      <div className="flex items-start">
         <div className={`flex-shrink-0 ${color} rounded-md p-3`}>
           <Icon className="h-6 w-6 text-white" />
         </div>
-        <div className="ml-5 w-0 flex-1">
-          <dl>
-            <dt className="text-sm font-medium text-gray-500 truncate">{title}</dt>
-            <dd className="text-2xl font-semibold text-gray-900">{value}</dd>
-          </dl>
+        <div className="ml-4 flex-1 min-w-0">
+          <dt className="text-sm font-medium text-gray-500 mb-1">{title}</dt>
+          <dd className="text-xl font-semibold text-gray-900 break-words">{value}</dd>
         </div>
       </div>
     </div>
