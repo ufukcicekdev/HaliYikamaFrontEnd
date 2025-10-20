@@ -15,21 +15,41 @@ import {
 interface DashboardStats {
   total_bookings: number;
   pending_bookings: number;
-  completed_bookings: number;
-  cancelled_bookings: number;
+  completed_bookings?: number; // Optional as it might come from status_breakdown
+  cancelled_bookings?: number; // Optional as it might come from status_breakdown
   total_revenue: string;
-  total_customers: number;
+  today_revenue: string;
+  month_revenue: string;
+  active_customers: number;
   today_bookings: number;
+  month_bookings: number;
+  status_breakdown?: Array<{
+    status: string;
+    count: number;
+  }>;
+  revenue_trend?: Array<{
+    date: string;
+    revenue: string;
+  }>;
 }
 
 interface RecentBooking {
   id: number;
-  customer_name: string;
-  customer_phone: string;
-  service_name: string;
+  booking_number?: string;
+  user_details?: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+  };
   status: string;
-  scheduled_date: string;
-  total_price: string;
+  pickup_date: string;
+  pickup_address_details?: {
+    title: string;
+  };
+  total: string;
+  currency: string;
   created_at: string;
 }
 
@@ -40,8 +60,11 @@ export default function AdminDashboard() {
     completed_bookings: 0,
     cancelled_bookings: 0,
     total_revenue: '0',
-    total_customers: 0,
+    today_revenue: '0',
+    month_revenue: '0',
+    active_customers: 0,
     today_bookings: 0,
+    month_bookings: 0,
   });
   const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +72,10 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  useEffect(() => {
+    console.log('✨ Stats state changed to:', stats);
+  }, [stats]);
 
   const fetchDashboardData = async () => {
     try {
@@ -58,12 +85,59 @@ export default function AdminDashboard() {
         apiClient.get('/admin/recent-bookings/?limit=10'),
       ]);
 
+      console.log('Stats response:', statsResponse);
+      console.log('Stats data:', statsResponse.data);
+      console.log('Bookings response:', bookingsResponse);
+
+
       if (statsResponse.success && statsResponse.data) {
-        setStats(statsResponse.data);
+        // Handle nested response structure
+        const data = statsResponse.data.data || statsResponse.data;
+        
+        console.log('📊 Actual stats data:', data);
+        
+        // Calculate completed and cancelled counts from status_breakdown if not directly provided
+        let completedCount = data.completed_bookings || 0;
+        let cancelledCount = data.cancelled_bookings || 0;
+        
+        if (data.status_breakdown && Array.isArray(data.status_breakdown)) {
+          const completedItem = data.status_breakdown.find((item: any) => item.status === 'completed');
+          const cancelledItem = data.status_breakdown.find((item: any) => item.status === 'cancelled');
+          const confirmedItem = data.status_breakdown.find((item: any) => item.status === 'confirmed');
+          
+          // Treat 'confirmed' as completed for display purposes
+          if (confirmedItem) completedCount += confirmedItem.count;
+          if (completedItem) completedCount += completedItem.count;
+          if (cancelledItem) cancelledCount = cancelledItem.count;
+        }
+        
+        const updatedStats = {
+          total_bookings: data.total_bookings || 0,
+          pending_bookings: data.pending_bookings || 0,
+          completed_bookings: completedCount,
+          cancelled_bookings: cancelledCount,
+          total_revenue: data.total_revenue || '0',
+          today_revenue: data.today_revenue || '0',
+          month_revenue: data.month_revenue || '0',
+          active_customers: data.active_customers || 0,
+          today_bookings: data.today_bookings || 0,
+          month_bookings: data.month_bookings || 0,
+        };
+        
+        console.log('✅ Final stats to set:', updatedStats);
+        setStats(updatedStats);
+      } else {
+        console.error('Stats response unsuccessful or no data');
       }
 
       if (bookingsResponse.success && bookingsResponse.data) {
-        setRecentBookings(bookingsResponse.data.results || bookingsResponse.data);
+        const bookings = Array.isArray(bookingsResponse.data) 
+          ? bookingsResponse.data 
+          : bookingsResponse.data.results || bookingsResponse.data.data || [];
+        console.log('Recent bookings:', bookings);
+        setRecentBookings(bookings);
+      } else {
+        console.error('Bookings response unsuccessful or no data');
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -97,6 +171,9 @@ export default function AdminDashboard() {
     );
   }
 
+  // Temporary debug output
+  console.log('Current stats state:', stats);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -128,7 +205,7 @@ export default function AdminDashboard() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Toplam Müşteri</p>
-              <p className="mt-2 text-3xl font-bold text-gray-900">{stats.total_customers}</p>
+              <p className="mt-2 text-3xl font-bold text-gray-900">{stats.active_customers || 0}</p>
             </div>
             <div className="p-3 bg-green-50 rounded-lg">
               <UsersIcon className="h-8 w-8 text-green-600" />
@@ -143,7 +220,11 @@ export default function AdminDashboard() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Toplam Gelir</p>
-              <p className="mt-2 text-3xl font-bold text-gray-900">{parseFloat(stats.total_revenue).toFixed(0)} ₺</p>
+              <p className="mt-2 text-3xl font-bold text-gray-900">
+                {stats.total_revenue && !isNaN(parseFloat(stats.total_revenue)) 
+                  ? parseFloat(stats.total_revenue).toFixed(0) 
+                  : '0'} ₺
+              </p>
             </div>
             <div className="p-3 bg-purple-50 rounded-lg">
               <BanknotesIcon className="h-8 w-8 text-purple-600" />
@@ -171,13 +252,13 @@ export default function AdminDashboard() {
       </div>
 
       {/* Quick Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-green-50 border border-green-200 rounded-lg p-6">
           <div className="flex items-center gap-3">
             <CheckCircleIcon className="h-10 w-10 text-green-600" />
             <div>
               <p className="text-sm font-medium text-green-900">Tamamlanan Siparişler</p>
-              <p className="mt-1 text-2xl font-bold text-green-700">{stats.completed_bookings}</p>
+              <p className="mt-1 text-2xl font-bold text-green-700">{stats.completed_bookings || 0}</p>
             </div>
           </div>
         </div>
@@ -187,7 +268,22 @@ export default function AdminDashboard() {
             <XCircleIcon className="h-10 w-10 text-red-600" />
             <div>
               <p className="text-sm font-medium text-red-900">İptal Edilen Siparişler</p>
-              <p className="mt-1 text-2xl font-bold text-red-700">{stats.cancelled_bookings}</p>
+              <p className="mt-1 text-2xl font-bold text-red-700">{stats.cancelled_bookings || 0}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <div className="flex items-center gap-3">
+            <ShoppingBagIcon className="h-10 w-10 text-blue-600" />
+            <div>
+              <p className="text-sm font-medium text-blue-900">Bu Ay</p>
+              <p className="mt-1 text-2xl font-bold text-blue-700">{stats.month_bookings}</p>
+              <p className="text-xs text-blue-600 mt-1">
+                Gelir: {stats.month_revenue && !isNaN(parseFloat(stats.month_revenue)) 
+                  ? parseFloat(stats.month_revenue).toFixed(0) 
+                  : '0'} ₺
+              </p>
             </div>
           </div>
         </div>
@@ -207,7 +303,8 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -239,27 +336,35 @@ export default function AdminDashboard() {
                 recentBookings.map((booking) => (
                   <tr key={booking.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      #{booking.id}
+                      #{booking.booking_number || booking.id}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{booking.customer_name}</div>
-                      {booking.customer_phone && (
-                        <a
-                          href={`tel:${booking.customer_phone}`}
-                          className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                        >
-                          📞 {booking.customer_phone}
-                        </a>
+                      {booking.user_details ? (
+                        <>
+                          <div className="text-sm font-medium text-gray-900">
+                            {booking.user_details.first_name} {booking.user_details.last_name}
+                          </div>
+                          {booking.user_details.phone && (
+                            <a
+                              href={`tel:${booking.user_details.phone}`}
+                              className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                            >
+                              📞 {booking.user_details.phone}
+                            </a>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-sm text-gray-500">Müşteri bilgisi yok</span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {booking.service_name}
+                      {booking.pickup_address_details?.title || 'Adres bilgisi yok'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(booking.scheduled_date).toLocaleDateString('tr-TR')}
+                      {new Date(booking.pickup_date).toLocaleDateString('tr-TR')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                      {booking.total_price} ₺
+                      {booking.total} {booking.currency}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {getStatusBadge(booking.status)}
@@ -283,6 +388,60 @@ export default function AdminDashboard() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden divide-y divide-gray-200">
+          {recentBookings.length > 0 ? (
+            recentBookings.map((booking) => (
+              <div key={booking.id} className="p-4 hover:bg-gray-50">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">#{booking.booking_number || booking.id}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {new Date(booking.pickup_date).toLocaleDateString('tr-TR')}
+                    </p>
+                  </div>
+                  {getStatusBadge(booking.status)}
+                </div>
+
+                {booking.user_details && (
+                  <div className="mb-3">
+                    <p className="text-sm font-medium text-gray-900">
+                      {booking.user_details.first_name} {booking.user_details.last_name}
+                    </p>
+                    {booking.user_details.phone && (
+                      <a
+                        href={`tel:${booking.user_details.phone}`}
+                        className="text-xs text-blue-600 hover:text-blue-700 inline-flex items-center gap-1 mt-1"
+                      >
+                        📞 {booking.user_details.phone}
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                <div className="mb-3">
+                  <p className="text-xs text-gray-500">Adres</p>
+                  <p className="text-sm text-gray-700">{booking.pickup_address_details?.title || 'Adres bilgisi yok'}</p>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <p className="text-lg font-bold text-gray-900">{booking.total} {booking.currency}</p>
+                  <Link
+                    href={`/admin/orders/${booking.id}`}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    Detay →
+                  </Link>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="p-12 text-center text-sm text-gray-500">
+              Henüz sipariş bulunmuyor
+            </div>
+          )}
         </div>
       </div>
     </div>
