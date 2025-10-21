@@ -324,136 +324,148 @@ export default function KategorilerPage() {
                   return (
                     <div
                       key={subtype.id}
-                      className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-100"
+                      className="bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow border border-gray-100"
                     >
-                      {/* Icon/Image */}
-                      <div className="flex flex-col items-center mb-4">
-                        <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center mb-3 overflow-hidden">
-                          {subtype.image ? (
-                            <img 
-                              src={`${process.env.NEXT_PUBLIC_API_URL}${subtype.image}`} 
-                              alt={subtype.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : subtype.icon ? (
-                            <span className="text-3xl">{subtype.icon}</span>
+                      <div className="flex gap-4">
+                        {/* Icon/Image - Left Side */}
+                        <div className="flex-shrink-0">
+                          <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                            {subtype.image ? (
+                              <img 
+                                src={`${process.env.NEXT_PUBLIC_API_URL}${subtype.image}`} 
+                                alt={subtype.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : subtype.icon ? (
+                              <span className="text-2xl">{subtype.icon}</span>
+                            ) : (
+                              <span className="text-2xl">🛋️</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Content - Right Side */}
+                        <div className="flex-1 flex flex-col justify-between">
+                          {/* Title and Price */}
+                          <div className="mb-2">
+                            <h3 className="text-base font-bold text-gray-900">
+                              {subtype.name}
+                            </h3>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {unitPrice.toFixed(0)} TL / {getPricingLabel(activeCategory.pricing_type)}
+                            </p>
+                          </div>
+
+                          {/* Quantity Controls */}
+                          {isPerSqm ? (
+                            // For carpets: Show both adet and m²
+                            <div className="space-y-2 mb-2">
+                              {/* Adet Controls */}
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-600">Adet</span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => decrementCount(subtype.id)}
+                                    className="w-7 h-7 rounded-full bg-purple-600 text-white flex items-center justify-center hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                    disabled={quantityData.count === 0}
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                                    </svg>
+                                  </button>
+                                  
+                                  <div className="w-10 text-center">
+                                    <div className="text-base font-bold text-gray-900">{quantityData.count}</div>
+                                  </div>
+                                  
+                                  <button
+                                    onClick={() => incrementCount(subtype.id)}
+                                    className="w-7 h-7 rounded-full bg-purple-600 text-white flex items-center justify-center hover:bg-purple-700 transition-colors"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* m² Controls */}
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-600">m² (her halı)</span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => decrementSize(subtype.id)}
+                                    className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                    disabled={quantityData.size === 0}
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                                    </svg>
+                                  </button>
+                                  
+                                  <div className="w-10 text-center">
+                                    <div className="text-base font-bold text-gray-900">{quantityData.size}</div>
+                                  </div>
+                                  
+                                  <button
+                                    onClick={() => incrementSize(subtype.id)}
+                                    className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 transition-colors"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
                           ) : (
-                            <span className="text-3xl">🛋️</span>
+                            // For sofas: Show only adet
+                            <div className="mb-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-600">Adet</span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => decrementCount(subtype.id)}
+                                    className="w-7 h-7 rounded-full bg-purple-600 text-white flex items-center justify-center hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                    disabled={quantityData.count === 0}
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                                    </svg>
+                                  </button>
+                                  
+                                  <div className="w-10 text-center">
+                                    <div className="text-base font-bold text-gray-900">{quantityData.count}</div>
+                                  </div>
+                                  
+                                  <button
+                                    onClick={() => incrementCount(subtype.id)}
+                                    className="w-7 h-7 rounded-full bg-purple-600 text-white flex items-center justify-center hover:bg-purple-700 transition-colors"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
                           )}
-                        </div>
-                        <h3 className="text-lg font-bold text-gray-900 text-center">
-                          {subtype.name}
-                        </h3>
-                        <p className="text-sm text-gray-500 mt-1">
-                          {unitPrice.toFixed(0)} TL / {getPricingLabel(activeCategory.pricing_type)}
-                        </p>
-                      </div>
 
-                      {isPerSqm ? (
-                        // For carpets: Show both adet and m²
-                        <div className="space-y-4 mb-4">
-                          {/* Adet Controls */}
-                          <div>
-                            <div className="text-xs text-gray-600 text-center mb-2">Adet</div>
-                            <div className="flex items-center justify-center gap-4">
-                              <button
-                                onClick={() => decrementCount(subtype.id)}
-                                className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                                disabled={quantityData.count === 0}
-                              >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                                </svg>
-                              </button>
-                              
-                              <div className="w-16 text-center">
-                                <div className="text-2xl font-bold text-gray-900">{quantityData.count}</div>
-                              </div>
-                              
-                              <button
-                                onClick={() => incrementCount(subtype.id)}
-                                className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center hover:bg-purple-700 transition-colors"
-                              >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
-                              </button>
+                          {/* Price Display and Add Button */}
+                          <div className="flex items-center justify-between">
+                            <div className="text-lg font-bold text-gray-900">
+                              {total.toFixed(0)} TL
                             </div>
-                          </div>
-
-                          {/* m² Controls */}
-                          <div>
-                            <div className="text-xs text-gray-600 text-center mb-2">m² (her halı)</div>
-                            <div className="flex items-center justify-center gap-4">
+                            {total > 0 && (
                               <button
-                                onClick={() => decrementSize(subtype.id)}
-                                className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                                disabled={quantityData.size === 0}
+                                onClick={() => handleAddToCart(subtype)}
+                                className="px-4 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium text-xs"
                               >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                                </svg>
+                                Sepete Ekle
                               </button>
-                              
-                              <div className="w-16 text-center">
-                                <div className="text-2xl font-bold text-gray-900">{quantityData.size}</div>
-                              </div>
-                              
-                              <button
-                                onClick={() => incrementSize(subtype.id)}
-                                className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 transition-colors"
-                              >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
-                              </button>
-                            </div>
+                            )}
                           </div>
                         </div>
-                      ) : (
-                        // For sofas: Show only adet
-                        <div className="mb-4">
-                          <div className="text-xs text-gray-600 text-center mb-2">Adet</div>
-                          <div className="flex items-center justify-center gap-4">
-                            <button
-                              onClick={() => decrementCount(subtype.id)}
-                              className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                              disabled={quantityData.count === 0}
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                              </svg>
-                            </button>
-                            
-                            <div className="w-16 text-center">
-                              <div className="text-2xl font-bold text-gray-900">{quantityData.count}</div>
-                            </div>
-                            
-                            <button
-                              onClick={() => incrementCount(subtype.id)}
-                              className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center hover:bg-purple-700 transition-colors"
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Price Display */}
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-gray-900">
-                          {total.toFixed(0)} TL
-                        </div>
-                        {total > 0 && (
-                          <button
-                            onClick={() => handleAddToCart(subtype)}
-                            className="mt-3 w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
-                          >
-                            Sepete Ekle
-                          </button>
-                        )}
                       </div>
                     </div>
                   );
