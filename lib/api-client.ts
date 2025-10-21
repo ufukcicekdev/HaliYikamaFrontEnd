@@ -35,26 +35,35 @@ class ApiClient {
 
           try {
             const refreshToken = this.getRefreshToken();
+            console.log('🔄 401 detected, attempting token refresh...');
+            console.log('Refresh token exists:', !!refreshToken);
+            
             if (!refreshToken) {
+              console.error('❌ No refresh token found');
               throw new Error('No refresh token');
             }
 
+            console.log('📤 Sending refresh token request...');
             const response = await axios.post(
               `${process.env.NEXT_PUBLIC_API_URL}/auth/token/refresh/`,
               { refresh: refreshToken }
             );
 
             const { access } = response.data;
+            console.log('✅ Token refreshed successfully');
             this.setAccessToken(access);
 
             if (originalRequest.headers) {
               originalRequest.headers.Authorization = `Bearer ${access}`;
             }
 
+            console.log('🔁 Retrying original request...');
             return this.client(originalRequest);
           } catch (refreshError) {
+            console.error('❌ Token refresh failed:', refreshError);
             this.clearTokens();
             if (typeof window !== 'undefined') {
+              console.log('🚪 Redirecting to login...');
               window.location.href = '/login';
             }
             return Promise.reject(refreshError);

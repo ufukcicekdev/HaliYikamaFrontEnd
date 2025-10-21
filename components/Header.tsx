@@ -4,7 +4,6 @@
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/lib/store/auth-store';
-import { useCartStore } from '@/lib/store/cart-store';
 import { apiClient } from '@/lib/api-client';
 import { Category } from '@/types';
 import { UserCircleIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
@@ -13,13 +12,11 @@ import NotificationBell from './NotificationBell';
 
 export default function Header() {
   const { user, isAuthenticated, logout } = useAuthStore();
-  const { getItemCount } = useCartStore();
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [showCategoriesMenu, setShowCategoriesMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const cartCount = getItemCount();
 
   useEffect(() => {
     setMounted(true);
@@ -119,24 +116,9 @@ export default function Header() {
           </div>
           
           <div className="flex gap-4 items-center">
-            {/* Notification Bell - Only for admin users */}
-            {mounted && isAuthenticated && user?.user_type === 'admin' && (
+            {/* Notification Bell - For all authenticated users */}
+            {mounted && isAuthenticated && (
               <NotificationBell />
-            )}
-
-            {/* Cart - Only show for non-admin users */}
-            {mounted && (!isAuthenticated || user?.user_type !== 'admin') && (
-              <Link
-                href="/sepet"
-                className="relative px-4 py-2 text-gray-700 hover:text-blue-600 font-medium transition-colors"
-              >
-                🛒
-                {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-                    {cartCount}
-                  </span>
-                )}
-              </Link>
             )}
 
             {/* User Menu or Auth Buttons */}

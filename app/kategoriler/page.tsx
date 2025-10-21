@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import './datepicker.css';
@@ -50,6 +51,7 @@ interface SubtypeQuantity {
 }
 
 export default function KategorilerPage() {
+  const router = useRouter();
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [activeCategory, setActiveCategory] = useState<Category | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,7 +68,11 @@ export default function KategorilerPage() {
   ]);
   const [pickupDate, setPickupDate] = useState<Date | null>(null); // For carpets
   const [deliveryDate, setDeliveryDate] = useState<Date | null>(null); // For carpets
-  const { addItem, items: cartItems, removeItem: removeCartItem } = useCartStore();
+  const [pickupTimeSlots, setPickupTimeSlots] = useState<any[]>([]);
+  const [deliveryTimeSlots, setDeliveryTimeSlots] = useState<any[]>([]);
+  const [selectedPickupSlot, setSelectedPickupSlot] = useState<number | null>(null);
+  const [selectedDeliverySlot, setSelectedDeliverySlot] = useState<number | null>(null);
+  const { addItem, items: cartItems, removeItem: removeCartItem, setPickupDate: setCartPickupDate, setDeliveryDate: setCartDeliveryDate, setPickupTimeSlotId, setDeliveryTimeSlotId } = useCartStore();
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -191,6 +197,34 @@ export default function KategorilerPage() {
   const removeFromCart = (itemId: string) => {
     removeCartItem(itemId);
     toast.success('Sepetten kaldırıldı');
+  };
+
+  const fetchPickupTimeSlots = async (date: Date) => {
+    try {
+      const dateStr = date.toISOString().split('T')[0];
+      const response = await apiClient.get(`/customer/bookings/timeslots/?date=${dateStr}`);
+      if (response.success && response.data) {
+        const slots = Array.isArray(response.data) ? response.data : response.data.results || [];
+        setPickupTimeSlots(slots.filter((slot: any) => slot.is_available));
+      }
+    } catch (error) {
+      console.error('Error fetching pickup time slots:', error);
+      toast.error('Saat aralıkları yüklenirken hata oluştu');
+    }
+  };
+
+  const fetchDeliveryTimeSlots = async (date: Date) => {
+    try {
+      const dateStr = date.toISOString().split('T')[0];
+      const response = await apiClient.get(`/customer/bookings/timeslots/?date=${dateStr}`);
+      if (response.success && response.data) {
+        const slots = Array.isArray(response.data) ? response.data : response.data.results || [];
+        setDeliveryTimeSlots(slots.filter((slot: any) => slot.is_available));
+      }
+    } catch (error) {
+      console.error('Error fetching delivery time slots:', error);
+      toast.error('Saat aralıkları yüklenirken hata oluştu');
+    }
   };
 
   const getPricingLabel = (pricingType: 'per_sqm' | 'per_item') => {
@@ -622,7 +656,21 @@ export default function KategorilerPage() {
                         </label>
                         <DatePicker
                           selected={pickupDate}
-                          onChange={(date) => setPickupDate(date)}
+                          onChange={(date) => {
+                            setPickupDate(date);
+                            setCartPickupDate(date);
+                            setSelectedPickupSlot(null);
+                            setPickupTimeSlotId(null);
+                            // Check if time selection is required
+                            const requiresTimeSelection = cartItems.some(item => {
+                              const cat = allCategories.find(c => c.name === item.categoryName);
+                              return cat?.requires_time_selection;
+                            });
+                            // Fetch time slots for selected date only if required
+                            if (date && requiresTimeSelection) {
+                              fetchPickupTimeSlots(date);
+                            }
+                          }}
                           minDate={new Date()}
                           dateFormat="dd/MM/yyyy"
                           placeholderText="Alım tarihi seçiniz"
@@ -630,13 +678,62 @@ export default function KategorilerPage() {
                           calendarClassName="shadow-xl"
                         />
                       </div>
+                      {/* Only show time slot selection if category requires it */}
+                      {cartItems.some(item => {
+                        const cat = allCategories.find(c => c.name === item.categoryName);
+                        return cat?.requires_time_selection;
+                      }) && (
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Alım saati:
+                          </label>
+                          {pickupTimeSlots.length > 0 ? (
+                            <div className="grid grid-cols-2 gap-2">
+                              {pickupTimeSlots.map((slot: any) => (
+                                <button
+                                  key={slot.id}
+                                  onClick={() => {
+                                    setSelectedPickupSlot(slot.id);
+                                    setPickupTimeSlotId(slot.id);
+                                  }}
+                                  className={`py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                                    selectedPickupSlot === slot.id
+                                      ? 'bg-purple-600 text-white'
+                                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                  }`}
+                                >
+                                  {slot.start_time} - {slot.end_time}
+                                </button>
+                              ))}
+                            </div>
+                          ) : pickupDate ? (
+                            <p className="text-sm text-gray-500">Bu tarih için müsait saat yok</p>
+                          ) : (
+                            <p className="text-sm text-gray-500">Önce tarih seçiniz</p>
+                          )}
+                        </div>
+                      )}
                       <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Teslim tarihi:
                         </label>
                         <DatePicker
                           selected={deliveryDate}
-                          onChange={(date) => setDeliveryDate(date)}
+                          onChange={(date) => {
+                            setDeliveryDate(date);
+                            setCartDeliveryDate(date);
+                            setSelectedDeliverySlot(null);
+                            setDeliveryTimeSlotId(null);
+                            // Check if time selection is required
+                            const requiresTimeSelection = cartItems.some(item => {
+                              const cat = allCategories.find(c => c.name === item.categoryName);
+                              return cat?.requires_time_selection;
+                            });
+                            // Fetch time slots for selected date only if required
+                            if (date && requiresTimeSelection) {
+                              fetchDeliveryTimeSlots(date);
+                            }
+                          }}
                           minDate={pickupDate ? new Date(pickupDate.getTime() + 7 * 24 * 60 * 60 * 1000) : new Date()}
                           dateFormat="dd/MM/yyyy"
                           placeholderText="Teslim tarihi seçiniz"
@@ -645,6 +742,41 @@ export default function KategorilerPage() {
                           disabled={!pickupDate}
                         />
                       </div>
+                      {/* Only show time slot selection if category requires it */}
+                      {cartItems.some(item => {
+                        const cat = allCategories.find(c => c.name === item.categoryName);
+                        return cat?.requires_time_selection;
+                      }) && (
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Teslim saati:
+                          </label>
+                          {deliveryTimeSlots.length > 0 ? (
+                            <div className="grid grid-cols-2 gap-2">
+                              {deliveryTimeSlots.map((slot: any) => (
+                                <button
+                                  key={slot.id}
+                                  onClick={() => {
+                                    setSelectedDeliverySlot(slot.id);
+                                    setDeliveryTimeSlotId(slot.id);
+                                  }}
+                                  className={`py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                                    selectedDeliverySlot === slot.id
+                                      ? 'bg-purple-600 text-white'
+                                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                  }`}
+                                >
+                                  {slot.start_time} - {slot.end_time}
+                                </button>
+                              ))}
+                            </div>
+                          ) : deliveryDate ? (
+                            <p className="text-sm text-gray-500">Bu tarih için müsait saat yok</p>
+                          ) : (
+                            <p className="text-sm text-gray-500">Önce tarih seçiniz</p>
+                          )}
+                        </div>
+                      )}
                       <p className="text-xs text-gray-500">
                         Alım ve teslim tarihleri arasında minimum 7 gün fark olmalıdır.
                       </p>
@@ -673,7 +805,13 @@ export default function KategorilerPage() {
                       </div>
                       <button
                         className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:shadow-lg transition-all font-semibold text-center"
-                        onClick={() => toast.success('Hizmet onaylanacak (TODO: Backend entegrasyonu)')}
+                        onClick={() => {
+                          if (cartItems.length === 0) {
+                            toast.error('Lütfen önce sepete ürün ekleyin');
+                            return;
+                          }
+                          router.push('/siparis-olustur');
+                        }}
                       >
                         Hizmeti Onayla
                       </button>

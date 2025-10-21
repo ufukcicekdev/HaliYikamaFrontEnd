@@ -2,13 +2,16 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { BellIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { BellIcon, CheckIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { BellAlertIcon } from '@heroicons/react/24/solid';
+import { toast } from 'react-hot-toast';
 import { useNotificationStore } from '@/lib/store/notification-store';
 import { apiClient } from '@/lib/api-client';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 export default function NotificationBell() {
   const router = useRouter();
+  const { user } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -23,6 +26,9 @@ export default function NotificationBell() {
     setNotifications,
     updateLastChecked,
   } = useNotificationStore();
+
+  // Determine if user is admin
+  const isAdmin = user?.user_type === 'admin';
 
   // Fetch notification sound URL from API
   useEffect(() => {
@@ -72,7 +78,7 @@ export default function NotificationBell() {
     }
   }, [notificationSoundUrl]);
 
-  // Fetch notifications from API
+  // Fetch notifications from API (admin or user endpoint based on user type)
   const fetchNotifications = async () => {
     // Check if user is authenticated
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
@@ -81,7 +87,9 @@ export default function NotificationBell() {
     }
     
     try {
-      const response = await apiClient.get('/admin/notifications/');
+      // Use different endpoint based on user type
+      const endpoint = isAdmin ? '/admin/notifications/' : '/customer/notifications/';
+      const response = await apiClient.get(endpoint);
       if (response.success && response.data) {
         const newNotifications = Array.isArray(response.data)
           ? response.data
@@ -116,7 +124,8 @@ export default function NotificationBell() {
         setNotifications(newNotifications);
       }
     } catch (error) {
-      // Silently fail - likely not authenticated or not admin
+      // Silently fail - likely not authenticated
+      console.error('Error fetching notifications:', error);
     }
   };
 
@@ -142,9 +151,12 @@ export default function NotificationBell() {
   const handleNotificationClick = async (notification: any) => {
     if (!notification.is_read) {
       await markAsRead(notification.id);
-      // Update on server
+      // Update on server (use correct endpoint)
       try {
-        await apiClient.patch(`/admin/notifications/${notification.id}/`, {
+        const endpoint = isAdmin 
+          ? `/admin/notifications/${notification.id}/` 
+          : `/customer/notifications/${notification.id}/`;
+        await apiClient.patch(endpoint, {
           is_read: true,
         });
       } catch (error) {
@@ -152,9 +164,12 @@ export default function NotificationBell() {
       }
     }
 
-    // Navigate to booking if available
+    // Navigate to booking if available - different routes for admin and customer
     if (notification.booking_id) {
-      router.push(`/admin/orders/${notification.booking_id}`);
+      const orderUrl = isAdmin 
+        ? `/admin/orders/${notification.booking_id}` 
+        : `/dashboard/siparisler/${notification.booking_id}`;
+      router.push(orderUrl);
       setIsOpen(false);
     }
   };
@@ -163,11 +178,32 @@ export default function NotificationBell() {
     markAllAsRead();
     updateLastChecked();
     
-    // Update on server
+    // Update on server (use correct endpoint)
     try {
-      await apiClient.post('/admin/notifications/mark-all-read/');
+      const endpoint = isAdmin 
+        ? '/admin/notifications/mark_all_read/' 
+        : '/customer/notifications/mark_all_read/';
+      await apiClient.post(endpoint);
     } catch (error) {
       console.error('Error marking all as read:', error);
+    }
+  };
+
+  const handleDeleteNotification = async (e: React.MouseEvent, notificationId: number) => {
+    e.stopPropagation(); // Prevent notification click
+    
+    try {
+      const endpoint = isAdmin 
+        ? `/admin/notifications/${notificationId}/` 
+        : `/customer/notifications/${notificationId}/`;
+      await apiClient.delete(endpoint);
+      
+      // Remove from local state
+      setNotifications(notifications.filter((n) => n.id !== notificationId));
+      toast.success('Bildirim silindi');
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      toast.error('Bildirim silinemedi');
     }
   };
 
@@ -178,7 +214,13 @@ export default function NotificationBell() {
       case 'cancelled_order':
         return '❌';
       case 'status_change':
+      case 'order_confirmed':
+      case 'order_in_progress':
         return '🔄';
+      case 'order_completed':
+        return '✨';
+      case 'order_cancelled':
+        return '❌';
       default:
         return 'ℹ️';
     }
@@ -241,41 +283,54 @@ export default function NotificationBell() {
             <div className="overflow-y-auto flex-1">
               {notifications.length > 0 ? (
                 notifications.map((notification) => (
-                  <button
+                  <div
                     key={notification.id}
-                    onClick={() => handleNotificationClick(notification)}
-                    className={`w-full px-4 py-3 text-left border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                    className={`w-full border-b border-gray-100 transition-colors ${
                       !notification.is_read ? 'bg-blue-50' : ''
                     }`}
                   >
-                    <div className="flex items-start gap-3">
-                      <span className="text-2xl flex-shrink-0">
-                        {getNotificationIcon(notification.type)}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <p
-                            className={`text-sm ${
-                              !notification.is_read
-                                ? 'font-semibold text-gray-900'
-                                : 'font-medium text-gray-700'
-                            }`}
-                          >
-                            {notification.title}
-                          </p>
-                          {!notification.is_read && (
-                            <span className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0 mt-1"></span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-600 mt-1 line-clamp-2">
-                          {notification.message}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {formatTimeAgo(notification.created_at)}
-                        </p>
+                    <div className="px-4 py-3">
+                      <div className="flex items-start gap-3">
+                        <button
+                          onClick={() => handleNotificationClick(notification)}
+                          className="flex items-start gap-3 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity"
+                        >
+                          <span className="text-2xl flex-shrink-0">
+                            {getNotificationIcon(notification.type)}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <p
+                                className={`text-sm ${
+                                  !notification.is_read
+                                    ? 'font-semibold text-gray-900'
+                                    : 'font-medium text-gray-700'
+                                }`}
+                              >
+                                {notification.title}
+                              </p>
+                              {!notification.is_read && (
+                                <span className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0 mt-1"></span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                              {notification.message}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {formatTimeAgo(notification.created_at)}
+                            </p>
+                          </div>
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteNotification(e, notification.id)}
+                          className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors flex-shrink-0"
+                          title="Sil"
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
-                  </button>
+                  </div>
                 ))
               ) : (
                 <div className="px-4 py-12 text-center">
@@ -290,7 +345,10 @@ export default function NotificationBell() {
               <div className="px-4 py-3 border-t border-gray-200">
                 <button
                   onClick={() => {
-                    router.push('/admin/notifications');
+                    const notificationsUrl = isAdmin 
+                      ? '/admin/notifications' 
+                      : '/dashboard/bildirimler';
+                    router.push(notificationsUrl);
                     setIsOpen(false);
                   }}
                   className="w-full text-center text-sm text-blue-600 hover:text-blue-700 font-medium"

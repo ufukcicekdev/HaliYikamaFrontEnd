@@ -25,30 +25,51 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
 
+  // Wait for Zustand to rehydrate from localStorage
   useEffect(() => {
     setMounted(true);
+    // Give Zustand time to rehydrate
+    const timer = setTimeout(() => {
+      setIsHydrated(true);
+      
+      // Check if we have tokens - if not, logout
+      if (isAuthenticated) {
+        const accessToken = localStorage.getItem('access_token');
+        const refreshToken = localStorage.getItem('refresh_token');
+        
+        if (!accessToken || !refreshToken) {
+          console.warn('Auth state exists but tokens are missing. Logging out...');
+          logout();
+          router.push('/login');
+        }
+      }
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    if (mounted && !isAuthenticated) {
-      router.push('/login');
-    } else if (mounted && isAuthenticated && user?.user_type === 'admin') {
-      // Redirect admins to admin dashboard
-      router.push('/admin');
+    if (isHydrated) {
+      if (!isAuthenticated) {
+        router.push('/login');
+      } else if (user?.user_type === 'admin') {
+        // Redirect admins to admin dashboard
+        router.push('/admin');
+      }
     }
-  }, [isAuthenticated, user, router, mounted]);
+  }, [isAuthenticated, user, router, isHydrated]);
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
     { name: 'Profil Bilgilerim', href: '/dashboard/profile', icon: UserIcon },
     { name: 'Adreslerim', href: '/dashboard/addresses', icon: MapPinIcon },
-    { name: 'Siparişlerim', href: '/dashboard/bookings', icon: ShoppingBagIcon },
+    { name: 'Siparişlerim', href: '/dashboard/siparislerim', icon: ShoppingBagIcon },
     { name: 'Ödeme Yöntemlerim', href: '/dashboard/payment-methods', icon: CreditCardIcon },
-    { name: 'Bildirimler', href: '/dashboard/notifications', icon: BellIcon },
+    { name: 'Bildirimler', href: '/dashboard/bildirimler', icon: BellIcon },
   ];
 
-  if (!mounted || !isAuthenticated) {
+  if (!mounted || !isHydrated || !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>

@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 
 export interface Notification {
   id: number;
-  type: 'new_order' | 'cancelled_order' | 'status_change' | 'info';
+  type: 'new_order' | 'cancelled_order' | 'status_change' | 'order_confirmed' | 'order_in_progress' | 'order_completed' | 'order_cancelled' | 'info';
   title: string;
   message: string;
   booking_id?: number;

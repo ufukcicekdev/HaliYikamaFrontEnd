@@ -14,9 +14,17 @@ export interface CartItem {
 
 interface CartState {
   items: CartItem[];
+  pickupDate: Date | null;
+  deliveryDate: Date | null;
+  pickupTimeSlotId: number | null;
+  deliveryTimeSlotId: number | null;
   addItem: (item: Omit<CartItem, 'id' | 'total'>) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
+  setPickupDate: (date: Date | null) => void;
+  setDeliveryDate: (date: Date | null) => void;
+  setPickupTimeSlotId: (id: number | null) => void;
+  setDeliveryTimeSlotId: (id: number | null) => void;
   clearCart: () => void;
   getTotal: () => number;
   getItemCount: () => number;
@@ -26,6 +34,10 @@ export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
+      pickupDate: null,
+      deliveryDate: null,
+      pickupTimeSlotId: null,
+      deliveryTimeSlotId: null,
 
       addItem: (item) => {
         const id = `${item.subtypeId}-${Date.now()}`;
@@ -52,8 +64,24 @@ export const useCartStore = create<CartState>()(
         }));
       },
 
+      setPickupDate: (date) => {
+        set({ pickupDate: date });
+      },
+
+      setDeliveryDate: (date) => {
+        set({ deliveryDate: date });
+      },
+
+      setPickupTimeSlotId: (id) => {
+        set({ pickupTimeSlotId: id });
+      },
+
+      setDeliveryTimeSlotId: (id) => {
+        set({ deliveryTimeSlotId: id });
+      },
+
       clearCart: () => {
-        set({ items: [] });
+        set({ items: [], pickupDate: null, deliveryDate: null, pickupTimeSlotId: null, deliveryTimeSlotId: null });
       },
 
       getTotal: () => {

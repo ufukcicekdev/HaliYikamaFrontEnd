@@ -7,7 +7,7 @@ import { toast } from 'react-hot-toast';
 import { BellIcon, CheckIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { useNotificationStore, Notification } from '@/lib/store/notification-store';
 
-export default function NotificationsPage() {
+export default function CustomerNotificationsPage() {
   const router = useRouter();
   const { notifications, setNotifications, markAsRead, markAllAsRead } = useNotificationStore();
   const [loading, setLoading] = useState(true);
@@ -20,7 +20,7 @@ export default function NotificationsPage() {
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/admin/notifications/');
+      const response = await apiClient.get('/customer/notifications/');
       
       if (response.success && response.data) {
         const notificationData = Array.isArray(response.data)
@@ -39,7 +39,7 @@ export default function NotificationsPage() {
   const handleMarkAsRead = async (id: number) => {
     markAsRead(id);
     try {
-      await apiClient.patch(`/admin/notifications/${id}/`, { is_read: true });
+      await apiClient.patch(`/customer/notifications/${id}/`, { is_read: true });
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
@@ -48,7 +48,7 @@ export default function NotificationsPage() {
   const handleMarkAllAsRead = async () => {
     markAllAsRead();
     try {
-      await apiClient.post('/admin/notifications/mark_all_read/');
+      await apiClient.post('/customer/notifications/mark_all_read/');
       toast.success('Tüm bildirimler okundu olarak işaretlendi');
     } catch (error) {
       console.error('Error marking all as read:', error);
@@ -57,7 +57,7 @@ export default function NotificationsPage() {
 
   const handleDeleteNotification = async (id: number) => {
     try {
-      await apiClient.delete(`/admin/notifications/${id}/`);
+      await apiClient.delete(`/customer/notifications/${id}/`);
       setNotifications(notifications.filter((n) => n.id !== id));
       toast.success('Bildirim silindi');
     } catch (error) {
@@ -73,12 +73,14 @@ export default function NotificationsPage() {
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'new_order':
-        return '🆕';
-      case 'cancelled_order':
-        return '❌';
-      case 'status_change':
+      case 'order_confirmed':
+        return '✅';
+      case 'order_in_progress':
         return '🔄';
+      case 'order_completed':
+        return '✨';
+      case 'order_cancelled':
+        return '❌';
       default:
         return 'ℹ️';
     }
@@ -207,7 +209,7 @@ export default function NotificationsPage() {
                       </div>
                       {notification.booking_id && (
                         <button
-                          onClick={() => router.push(`/admin/orders/${notification.booking_id}`)}
+                          onClick={() => router.push(`/dashboard/siparisler/${notification.booking_id}`)}
                           className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium"
                         >
                           Siparişi Görüntüle →

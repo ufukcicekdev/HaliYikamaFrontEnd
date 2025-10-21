@@ -19,11 +19,17 @@ interface DashboardStats {
 }
 
 interface RecentBooking {
-  id: number;
-  service_name: string;
+  id: string;
+  booking_number?: string;
   status: string;
-  scheduled_date: string;
-  total_price: string;
+  pickup_date: string;
+  pickup_address_details?: {
+    title: string;
+    full_address: string;
+  };
+  total: string;
+  currency: string;
+  created_at: string;
 }
 
 export default function DashboardPage() {
@@ -44,12 +50,35 @@ export default function DashboardPage() {
   const fetchDashboardData = async () => {
     try {
       const [statsResponse, bookingsResponse] = await Promise.all([
-        apiClient.get('/bookings/stats/'),
-        apiClient.get('/bookings/?limit=5'),
+        apiClient.get('/customer/bookings/stats/'),
+        apiClient.get('/customer/bookings/?limit=5'),
       ]);
 
+      console.log('📊 Stats response:', statsResponse);
+
       if (statsResponse.success && statsResponse.data) {
-        setStats(statsResponse.data);
+        // Backend returns: { success: true, data: { total_bookings, ... } }
+        // But our response might be double-wrapped, so check both
+        const rawData = statsResponse.data;
+        console.log('📊 Raw data:', rawData);
+        
+        // Check if data is double-nested
+        const actualData = rawData.data || rawData;
+        console.log('📊 Actual data:', actualData);
+        
+        setStats({
+          total_bookings: actualData.total_bookings || 0,
+          pending_bookings: actualData.pending_bookings || 0,
+          completed_bookings: actualData.completed_bookings || 0,
+          cancelled_bookings: actualData.cancelled_bookings || 0,
+        });
+        
+        console.log('📊 Stats set to:', {
+          total_bookings: actualData.total_bookings || 0,
+          pending_bookings: actualData.pending_bookings || 0,
+          completed_bookings: actualData.completed_bookings || 0,
+          cancelled_bookings: actualData.cancelled_bookings || 0,
+        });
       }
 
       if (bookingsResponse.success && bookingsResponse.data) {
@@ -191,7 +220,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Son Siparişler</h2>
             <Link
-              href="/dashboard/bookings"
+              href="/dashboard/siparislerim"
               className="text-sm text-primary-600 hover:text-primary-700 font-medium"
             >
               Tümünü Gör
@@ -202,20 +231,33 @@ export default function DashboardPage() {
         <div className="divide-y divide-gray-200">
           {recentBookings.length > 0 ? (
             recentBookings.map((booking) => (
-              <div key={booking.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
+              <Link
+                key={booking.id}
+                href={`/dashboard/siparisler/${booking.id}`}
+                className="block px-6 py-4 hover:bg-gray-50 transition-colors"
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <h3 className="text-sm font-medium text-gray-900">{booking.service_name}</h3>
+                    <h3 className="text-sm font-medium text-gray-900">
+                      Sipariş #{booking.booking_number || booking.id.substring(0, 8)}
+                    </h3>
                     <p className="mt-1 text-xs text-gray-500">
-                      Tarih: {new Date(booking.scheduled_date).toLocaleDateString('tr-TR')}
+                      Tarih: {new Date(booking.pickup_date).toLocaleDateString('tr-TR')}
                     </p>
+                    {booking.pickup_address_details && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Adres: {booking.pickup_address_details.title}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-4">
-                    <span className="text-sm font-semibold text-gray-900">{booking.total_price} ₺</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {booking.total} {booking.currency}
+                    </span>
                     {getStatusBadge(booking.status)}
                   </div>
                 </div>
-              </div>
+              </Link>
             ))
           ) : (
             <div className="px-6 py-12 text-center">

@@ -2,6 +2,7 @@
 
 import { apiClient } from '@/lib/api-client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { 
   ClockIcon, 
   CheckCircleIcon, 
@@ -11,44 +12,56 @@ import {
 } from '@heroicons/react/24/outline';
 
 interface Booking {
-  id: number;
-  service_name: string;
-  category_name: string;
+  id: string;
+  booking_number?: string;
   status: string;
-  scheduled_date: string;
-  scheduled_time: string;
-  total_price: string;
-  address: {
+  pickup_date: string;
+  pickup_address_details?: {
     title: string;
-    address_line: string;
+    full_address: string;
+    district_details?: {
+      name: string;
+    };
   };
+  total: string;
+  currency: string;
   created_at: string;
 }
 
 export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [allBookings, setAllBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   useEffect(() => {
-    fetchBookings();
-  }, [statusFilter]);
+    fetchAllBookings();
+  }, []);
 
-  const fetchBookings = async () => {
+  useEffect(() => {
+    filterBookings();
+  }, [statusFilter, allBookings]);
+
+  const fetchAllBookings = async () => {
     setLoading(true);
     try {
-      const url = statusFilter === 'all' 
-        ? '/bookings/' 
-        : `/bookings/?status=${statusFilter}`;
-      
-      const response = await apiClient.get(url);
+      const response = await apiClient.get('/customer/bookings/');
       if (response.success && response.data) {
-        setBookings(Array.isArray(response.data) ? response.data : response.data.results || []);
+        const data = Array.isArray(response.data) ? response.data : response.data.results || [];
+        setAllBookings(data);
       }
     } catch (error) {
       console.error('Error fetching bookings:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const filterBookings = () => {
+    if (statusFilter === 'all') {
+      setBookings(allBookings);
+    } else {
+      setBookings(allBookings.filter(booking => booking.status === statusFilter));
     }
   };
 
@@ -92,15 +105,15 @@ export default function BookingsPage() {
     );
   };
 
-  const handleCancelBooking = async (bookingId: number) => {
+  const handleCancelBooking = async (bookingId: string) => {
     if (!confirm('Bu siparişi iptal etmek istediğinizden emin misiniz?')) {
       return;
     }
 
     try {
-      const response = await apiClient.patch(`/bookings/${bookingId}/`, { status: 'cancelled' });
+      const response = await apiClient.patch(`/customer/bookings/${bookingId}/`, { status: 'cancelled' });
       if (response.success) {
-        fetchBookings();
+        fetchAllBookings();
       }
     } catch (error) {
       console.error('Error cancelling booking:', error);
@@ -159,25 +172,36 @@ export default function BookingsPage() {
       {bookings.length > 0 ? (
         <div className="space-y-4">
           {bookings.map((booking) => (
-            <div key={booking.id} className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
+            <Link
+              key={booking.id}
+              href={`/dashboard/siparisler/${booking.id}`}
+              className="block bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow"
+            >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3">
-                    <h3 className="text-lg font-semibold text-gray-900">{booking.service_name}</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Sipariş #{booking.booking_number || booking.id.substring(0, 8)}
+                    </h3>
                     {getStatusBadge(booking.status)}
                   </div>
                   
                   <div className="mt-3 space-y-2">
                     <p className="text-sm text-gray-600">
-                      <span className="font-medium">Kategori:</span> {booking.category_name}
+                      <span className="font-medium">Sipariş No:</span> {booking.booking_number || booking.id}
                     </p>
                     <p className="text-sm text-gray-600">
                       <span className="font-medium">Tarih:</span>{' '}
-                      {new Date(booking.scheduled_date).toLocaleDateString('tr-TR')} - {booking.scheduled_time}
+                      {new Date(booking.pickup_date).toLocaleDateString('tr-TR')}
                     </p>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Adres:</span> {booking.address.title} - {booking.address.address_line}
-                    </p>
+                    {booking.pickup_address_details && (
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">Adres:</span> {booking.pickup_address_details.title}
+                        {booking.pickup_address_details.district_details && (
+                          <span> - {booking.pickup_address_details.district_details.name}</span>
+                        )}
+                      </p>
+                    )}
                     <p className="text-sm text-gray-600">
                       <span className="font-medium">Sipariş Tarihi:</span>{' '}
                       {new Date(booking.created_at).toLocaleDateString('tr-TR')}
@@ -186,7 +210,7 @@ export default function BookingsPage() {
                 </div>
 
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-gray-900">{booking.total_price} ₺</p>
+                  <p className="text-2xl font-bold text-gray-900">{booking.total} {booking.currency}</p>
                   {booking.status === 'pending' && (
                     <button
                       onClick={() => handleCancelBooking(booking.id)}
@@ -197,7 +221,7 @@ export default function BookingsPage() {
                   )}
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       ) : (
